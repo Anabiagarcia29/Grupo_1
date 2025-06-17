@@ -28,6 +28,7 @@
 #include <sys/dirent.h>
 #include <sys/exec.h>
 #include <sys/param.h>
+#include <stdio.h>
 #include "path.h"
 #include "vnode.h"
 #include "file.h"
@@ -35,7 +36,6 @@
 #include <machine/vmparam.h>
 #include <assert.h>
 #include <fcntl.h>
-
 #define _KERNEL	/* for ELF_AUX_ENTRIES */
 #include <libexec.h>
 
@@ -312,7 +312,7 @@ int pm_exec(vir_bytes path, size_t path_len, vir_bytes frame, size_t frame_len,
 	strlcpy(firstexec, elf_interpreter, PATH_MAX);
 	Get_read_vp(execi, fullpath, 0, 0, &resolve, fp);
   }
-
+  printf(": %s\n", fullpath);
   /* We also want an FD for VM to mmap() the process in if possible. */
   {
 	struct vnode *vp = execi.vp;
