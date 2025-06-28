@@ -18,6 +18,8 @@
 #include <minix/portio.h>
 #include "const.h"
 #include "priv.h"
+EXTERN struct proc *run_q_head; 
+EXTERN struct proc *run_q_tail; 
 
 struct proc {
   struct stackframe_s p_reg;	/* process' registers saved in stack frame */
