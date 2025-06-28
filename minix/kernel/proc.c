@@ -59,6 +59,10 @@ static int try_one(endpoint_t receive_e, struct proc *src_ptr,
 	struct proc *dst_ptr);
 static struct proc * pick_proc(void);
 static void enqueue_head(struct proc *rp);
+EXTERN struct proc *run_q_head; 
+executáveis
+EXTERN struct proc *run_q_tail; 
+
 
 /* all idles share the same idle_priv structure */
 static struct priv idle_priv;
