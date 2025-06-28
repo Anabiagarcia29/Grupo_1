@@ -60,7 +60,6 @@ static int try_one(endpoint_t receive_e, struct proc *src_ptr,
 static struct proc * pick_proc(void);
 static void enqueue_head(struct proc *rp);
 EXTERN struct proc *run_q_head; 
-executáveis
 EXTERN struct proc *run_q_tail; 
 
 
