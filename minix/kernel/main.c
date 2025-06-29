@@ -195,7 +195,7 @@ void kmain(kinfo_t *local_cbi)
 	 * RTS_NO_PRIV flag. They can only be scheduled once the root system
 	 * process has set their privileges.
 	 */
-	unsigned long initial_seed;
+	u64_t initial_seed;
         read_tsc_64(&initial_seed);
         srand_kernel(initial_seed);
 	proc_nr = proc_nr(rp);
