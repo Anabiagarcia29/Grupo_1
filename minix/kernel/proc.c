@@ -66,6 +66,8 @@ static void enqueue_head(struct proc *rp);
 /* all idles share the same idle_priv structure */
 static struct priv idle_priv;
 
+static unsigned long next_random = 1;
+
 static void set_idle_name(char * name, int n)
 {
         int i, c;
@@ -171,6 +173,16 @@ static void switch_address_space_idle(void)
 	 */
 	switch_address_space(proc_addr(VM_PROC_NR));
 #endif
+}
+
+{
+next_random = seed;
+}
+
+int rand_kernel(void)
+{
+	next_random = next_random * 1103515245 + 12345;
+	return (unsigned int)(next_random / 65536) % 32768; 
 }
 
 /*===========================================================================*
@@ -1769,7 +1781,7 @@ static struct proc * pick_proc(void)
   if (total_tickets <= 0 || !runnable_procs_list) {
 	return NULL;
   }
-  winning_ticket = rand() % total_tickets;
+  winning_ticket = rand_kernel() % total_tickets;
   for (rp = runnable_procs_list; rp != NULL; rp = rp->p_nextready) {
 	current_sum += rp->p_tickets;
 	if (winning_ticket < current_sum) {
