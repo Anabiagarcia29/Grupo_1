@@ -2,6 +2,7 @@
  * and defines the principal constants.
  */
 #define _SYSTEM		1	/* tell headers that this is the kernel */
+#define DEFAULT_LOTTERY_TICKETS 50
 
 /* The following are so basic, all the *.c files get them automatically. */
 #include <minix/config.h>	/* MUST be first */
@@ -14,5 +15,7 @@
 #include <errno.h>
 
 #include "proto.h"
+
+
 
 extern struct machine machine;		/* machine info */
