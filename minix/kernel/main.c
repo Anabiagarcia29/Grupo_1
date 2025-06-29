@@ -29,6 +29,9 @@
 #endif
 #include "spinlock.h"
 
+extern void srand_kernel(unsigned long seed);
+extern void read_tsc_64(u64_t *val);
+
 /* dummy for linking */
 char *** _penviron;
 
@@ -119,7 +122,7 @@ void kmain(kinfo_t *local_cbi)
   register struct proc *rp;	/* process pointer */
   register int i, j;
   static int bss_test;
-
+	
   /* bss sanity check */
   assert(bss_test == 0);
   bss_test = 1;
@@ -192,6 +195,9 @@ void kmain(kinfo_t *local_cbi)
 	 * RTS_NO_PRIV flag. They can only be scheduled once the root system
 	 * process has set their privileges.
 	 */
+	unsigned long initial_seed;
+        read_tsc_64(&initial_seed);
+        srand_kernel(initial_seed);
 	proc_nr = proc_nr(rp);
 	schedulable_proc = (iskerneln(proc_nr) || isrootsysn(proc_nr) ||
 		proc_nr == VM_PROC_NR);
