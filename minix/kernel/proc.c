@@ -180,9 +180,6 @@ static void switch_address_space_idle(void)
 #endif
 }
 
-{
-next_random = seed;
-}
 
 int rand_kernel(void)
 {
