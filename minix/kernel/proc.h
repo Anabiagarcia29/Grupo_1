@@ -135,6 +135,8 @@ struct proc {
   int p_schedules;
 #endif
 };
+EXTERN int total_tickets;
+EXTERN struct proc *runnable_procs_list; 
 
 #endif /* __ASSEMBLY__ */
 
