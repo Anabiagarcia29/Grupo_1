@@ -41,6 +41,9 @@
 
 #include <minix/syslib.h>
 
+int total_tickets = 0;
+struct proc *runnable_procs_list = NULL;
+
 /* Scheduling and message passing functions */
 static void idle(void);
 /**
@@ -1597,47 +1600,27 @@ void enqueue(
 )
 {
 /* Add 'rp' to one of the queues of runnable processes.  This function is 
- * responsible for inserting a process into one of the scheduling queues. 
+ * responsible for inserting a process into one the scheduling queue. 
  * The mechanism is implemented here.   The actual scheduling policy is
  * defined in sched() and pick_proc().
  *
  * This function can be used x-cpu as it always uses the queues of the cpu the
  * process is assigned to.
  */
-  int q = rp->p_priority;	 		/* scheduling queue to use */
-  struct proc **rdy_head, **rdy_tail;
-  
   assert(proc_is_runnable(rp));
-
-  assert(q >= 0);
-
-  rdy_head = get_cpu_var(rp->p_cpu, run_q_head);
-  rdy_tail = get_cpu_var(rp->p_cpu, run_q_tail);
-
-  /* Now add the process to the queue. */
-  if (!rdy_head[q]) {		/* add to empty queue */
-      rdy_head[q] = rdy_tail[q] = rp; 		/* create a new queue */
-      rp->p_nextready = NULL;		/* mark new end */
-  } 
-  else {					/* add to tail of queue */
-      rdy_tail[q]->p_nextready = rp;		/* chain tail of queue */	
-      rdy_tail[q] = rp;				/* set new queue tail */
-      rp->p_nextready = NULL;		/* mark new end */
-  }
-
-  if (cpuid == rp->p_cpu) {
-	  /*
-	   * enqueueing a process with a higher priority than the current one,
-	   * it gets preempted. The current process must be preemptible. Testing
-	   * the priority also makes sure that a process does not preempt itself
-	   */
-	  struct proc * p;
-	  p = get_cpulocal_var(proc_ptr);
-	  assert(p);
-	  if((p->p_priority > rp->p_priority) &&
-			  (priv(p)->s_flags & PREEMPTIBLE))
-		  RTS_SET(p, RTS_PREEMPTED); /* calls dequeue() */
-  }
+  if (!runnable_procs_list) {
+	runnable_procs_list = rp;
+	rp->p_nextready = NULL; 
+   } else {
+	struct proc *current = runnable_procs_list;
+	while (current->p_nextready) {
+	current = current->p_nextready;
+	}
+	current->p_nextready = rp;
+	rp->p_nextready = NULL;
+	}
+  total_tickets += rp->p_tickets;
+	
 #ifdef CONFIG_SMP
   /*
    * if the process was enqueued on a different cpu and the cpu is idle, i.e.
@@ -1722,13 +1705,10 @@ void dequeue(struct proc *rp)
  *
  * This function can operate x-cpu as it always removes the process from the
  * queue of the cpu the process is currently assigned to.
- */
-  int q = rp->p_priority;		/* queue to use */
+ */	
   struct proc **xpp;			/* iterate over queue */
-  struct proc *prev_xp;
+  struct proc *prev_xp = NULL;
   u64_t tsc, tsc_delta;
-
-  struct proc **rdy_tail;
 
   assert(proc_ptr_ok(rp));
   assert(!proc_is_runnable(rp));
@@ -1736,26 +1716,19 @@ void dequeue(struct proc *rp)
   /* Side-effect for kernel: check if the task's stack still is ok? */
   assert (!iskernelp(rp) || *priv(rp)->s_stack_guard == STACK_GUARD);
 
-  rdy_tail = get_cpu_var(rp->p_cpu, run_q_tail);
 
   /* Now make sure that the process is not in its ready queue. Remove the 
    * process if it is found. A process can be made unready even if it is not 
    * running by being sent a signal that kills it.
-   */
-  prev_xp = NULL;				
-  for (xpp = get_cpu_var_ptr(rp->p_cpu, run_q_head[q]); *xpp;
-		  xpp = &(*xpp)->p_nextready) {
+   */				
+  for (xpp = &runnable_procs_list; *xpp; xpp = &(*xpp)->p_nextready) {
       if (*xpp == rp) {				/* found process to remove */
           *xpp = (*xpp)->p_nextready;		/* replace with next chain */
-          if (rp == rdy_tail[q]) {		/* queue tail removed */
-              rdy_tail[q] = prev_xp;		/* set new tail */
-	  }
-
           break;
       }
       prev_xp = *xpp;				/* save previous in chain */
   }
-
+  total_tickets -= rp->p_tickets;
 	
   /* Process accounting for scheduling */
   rp->p_accounting.dequeues++;
@@ -1784,32 +1757,27 @@ void dequeue(struct proc *rp)
  *===========================================================================*/
 static struct proc * pick_proc(void)
 {
+ register struct proc *rp = NULL;
+ int winning_ticket; 
+ int current_sum = 0;
 /* Decide who to run now.  A new process is selected and returned.
  * When a billable process is selected, record it in 'bill_ptr', so that the 
  * clock task can tell who to bill for system time.
  *
  * This function always uses the run queues of the local cpu!
  */
-  register struct proc *rp;			/* process to run */
-  struct proc **rdy_head;
-  int q;				/* iterate over queues */
-
-  /* Check each of the scheduling queues for ready processes. The number of
-   * queues is defined in proc.h, and priorities are set in the task table.
-   * If there are no processes ready to run, return NULL.
-   */
-  rdy_head = get_cpulocal_var(run_q_head);
-  for (q=0; q < NR_SCHED_QUEUES; q++) {	
-	if(!(rp = rdy_head[q])) {
-		TRACE(VF_PICKPROC, printf("cpu %d queue %d empty\n", cpuid, q););
-		continue;
-	}
-	assert(proc_is_runnable(rp));
-	if (priv(rp)->s_flags & BILLABLE)	 	
-		get_cpulocal_var(bill_ptr) = rp; /* bill for system time */
-	return rp;
+  if (total_tickets <= 0 || !runnable_procs_list) {
+	return NULL;
   }
-  return NULL;
+  winning_ticket = rand() % total_tickets;
+  for (rp = runnable_procs_list; rp != NULL; rp = rp->p_nextready) {
+	current_sum += rp->p_tickets;
+	if (winning_ticket < current_sum) {
+	 	break;
+        }
+   }
+  assert(proc_is_runnable(rp));
+  return rp;
 }
 
 /*===========================================================================*
