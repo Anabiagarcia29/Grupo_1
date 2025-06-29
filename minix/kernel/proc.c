@@ -68,6 +68,11 @@ static struct priv idle_priv;
 
 static unsigned long next_random = 1;
 
+void srand_kernel(unsigned long seed)
+{
+	next_random = seed;
+}
+
 static void set_idle_name(char * name, int n)
 {
         int i, c;
