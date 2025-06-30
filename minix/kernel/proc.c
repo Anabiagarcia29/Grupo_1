@@ -1628,7 +1628,7 @@ void enqueue(
    * the time is off, we need to wake up that cpu and let it schedule this new
    * process
    */
-  else if (get_cpu_var(rp->p_cpu, cpu_is_idle)) {
+  if (get_cpu_var(rp->p_cpu, cpu_is_idle)) {
 	  smp_schedule(rp->p_cpu);
   }
 #endif
@@ -1707,7 +1707,6 @@ void dequeue(struct proc *rp)
  * This function can operate x-cpu as it always removes the process from the
  * queue of the cpu the process is currently assigned to.
  */
-  int q = rp->p_priority;		/* queue to use */
   struct proc **xpp;			/* iterate over queue */
   struct proc *prev_xp = NULL;
   u64_t tsc, tsc_delta;
@@ -1726,9 +1725,12 @@ void dequeue(struct proc *rp)
   for (xpp = &runnable_procs_list; *xpp; xpp = &(*xpp)->p_nextready) {
       if (*xpp == rp) {				/* found process to remove */
           *xpp = (*xpp)->p_nextready;		/* replace with next chain */
-          if (rp == runnable_procs_tail)) {		/* queue tail removed */
+          if (rp == runnable_procs_tail) {		/* queue tail removed */
               runnable_procs_tail = prev_xp;		/* set new tail */
 	  }
+	   if (runnable_procs_list == NULL) {
+		runnable_procs_tail = NULL;
+            }
 
           break;
       }
@@ -1777,7 +1779,6 @@ static struct proc * pick_proc(void)
    * queues is defined in proc.h, and priorities are set in the task table.
    * If there are no processes ready to run, return NULL.
    */
-  rdy_head = get_cpulocal_var(run_q_head);
   if (!runnable_procs_list) {
 	return NULL;
   }
