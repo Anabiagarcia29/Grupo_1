@@ -1620,6 +1620,19 @@ void enqueue(
   if (proc_ptr && rp->p_priority < proc_ptr->p_priority) {
 	RTS_SET(proc_ptr, RTS_PREEMPTED);
    }
+	if (cpuid == rp->p_cpu) {
+	  /*
+	   * enqueueing a process with a higher priority than the current one,
+	   * it gets preempted. The current process must be preemptible. Testing
+	   * the priority also makes sure that a process does not preempt itself
+	   */
+	  struct proc * p;
+	  p = get_cpulocal_var(proc_ptr);
+	  assert(p);
+	  if((p->p_priority > rp->p_priority) &&
+			  (priv(p)->s_flags & PREEMPTIBLE))
+		  RTS_SET(p, RTS_PREEMPTED); /* calls dequeue() */
+  }
   
 
 #ifdef CONFIG_SMP
