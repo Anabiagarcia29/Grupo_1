@@ -163,7 +163,7 @@ int do_start_scheduling(message *m_ptr)
 	rmp->priority     = USER_Q;
 	rmp->time_slice = DEFAULT_USER_TIME_SLICE;
 
-	if (rv = sys_schedctl(0, rmp->endpoint, rmp->priority, rmp->time_slice,0)) != OK){
+	if ((rv = sys_schedctl(0, rmp->endpoint, rmp->priority, rmp->time_slice,0)) != OK){
 		printf("Sched: Error taking over scheduling for %d, kernel said %d\n",
 			rmp->endpoint, rv);
 		return rv;
