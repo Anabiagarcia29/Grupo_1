@@ -162,9 +162,8 @@ int do_start_scheduling(message *m_ptr)
 	rmp->parent       = m_ptr->m_lsys_sched_scheduling_start.parent;
 	rmp->priority     = USER_Q;
 	rmp->time_slice = DEFAULT_USER_TIME_SLICE;
-	}
 
-	if ((rv = sys_schedctl(0, rmp->endpoint, 0, 0, 0)) != OK) {
+	if (rv = sys_schedctl(0, rmp->endpoint, rmp->priority, rmp->time_slice,0)) != OK){
 		printf("Sched: Error taking over scheduling for %d, kernel said %d\n",
 			rmp->endpoint, rv);
 		return rv;
@@ -224,14 +223,14 @@ int do_nice(message *m_ptr)
 	if (new_priority > MAX_USER_Q) new_priority = MAX_USER_Q;
 
 	/* Update the proc entry and reschedule the process */
-	rmp->max_priority = rmp->priority = new_q;
+	rmp->priority = new_priority;
 
 	if ((rv = schedule_process_local(rmp)) != OK) {
 		printf("SCHED: Error rescheduling process after nice: %d\n", rv);
 
 	}
 
-	return rv;
+	return OK;
 }
 
 /*===========================================================================*
