@@ -1617,10 +1617,7 @@ void enqueue(
     runnable_procs_tail = rp;
     rp->p_nextready = NULL;
 
-  if (proc_ptr && rp->p_priority < proc_ptr->p_priority) {
-	RTS_SET(proc_ptr, RTS_PREEMPTED);
-   }
-	if (cpuid == rp->p_cpu) {
+    if (cpuid == rp->p_cpu) {
 	  /*
 	   * enqueueing a process with a higher priority than the current one,
 	   * it gets preempted. The current process must be preemptible. Testing
@@ -1633,7 +1630,6 @@ void enqueue(
 			  (priv(p)->s_flags & PREEMPTIBLE))
 		  RTS_SET(p, RTS_PREEMPTED); /* calls dequeue() */
   }
-  
 
 #ifdef CONFIG_SMP
   /*
