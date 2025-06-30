@@ -96,7 +96,7 @@ int do_noquantum(message *m_ptr)
 	}
 
 	rmp = &schedproc[proc_nr_n];
-	if (rmp->priority < MIN_USER_Q) {
+	if (rmp->priority < MAX_USER_Q) {
 		rmp->priority += 1; /* lower priority */
 	}
 
@@ -160,61 +160,10 @@ int do_start_scheduling(message *m_ptr)
 	/* Populate process slot */
 	rmp->endpoint     = m_ptr->m_lsys_sched_scheduling_start.endpoint;
 	rmp->parent       = m_ptr->m_lsys_sched_scheduling_start.parent;
-	rmp->max_priority = m_ptr->m_lsys_sched_scheduling_start.maxprio;
-	if (rmp->max_priority >= NR_SCHED_QUEUES) {
-		return EINVAL;
+	rmp->priority     = USER_Q;
+	rmp->time_slice = DEFAULT_USER_TIME_SLICE;
 	}
 
-	/* Inherit current priority and time slice from parent. Since there
-	 * is currently only one scheduler scheduling the whole system, this
-	 * value is local and we assert that the parent endpoint is valid */
-	if (rmp->endpoint == rmp->parent) {
-		/* We have a special case here for init, which is the first
-		   process scheduled, and the parent of itself. */
-		rmp->priority   = USER_Q;
-		rmp->time_slice = DEFAULT_USER_TIME_SLICE;
-
-		/*
-		 * Since kernel never changes the cpu of a process, all are
-		 * started on the BSP and the userspace scheduling hasn't
-		 * changed that yet either, we can be sure that BSP is the
-		 * processor where the processes run now.
-		 */
-#ifdef CONFIG_SMP
-		rmp->cpu = machine.bsp_id;
-		/* FIXME set the cpu mask */
-#endif
-	}
-	
-	switch (m_ptr->m_type) {
-
-	case SCHEDULING_START:
-		/* We have a special case here for system processes, for which
-		 * quanum and priority are set explicitly rather than inherited 
-		 * from the parent */
-		rmp->priority   = rmp->max_priority;
-		rmp->time_slice = m_ptr->m_lsys_sched_scheduling_start.quantum;
-		break;
-		
-	case SCHEDULING_INHERIT:
-		/* Inherit current priority and time slice from parent. Since there
-		 * is currently only one scheduler scheduling the whole system, this
-		 * value is local and we assert that the parent endpoint is valid */
-		if ((rv = sched_isokendpt(m_ptr->m_lsys_sched_scheduling_start.parent,
-				&parent_nr_n)) != OK)
-			return rv;
-
-		rmp->priority = schedproc[parent_nr_n].priority;
-		rmp->time_slice = schedproc[parent_nr_n].time_slice;
-		break;
-		
-	default: 
-		/* not reachable */
-		assert(0);
-	}
-
-	/* Take over scheduling the process. The kernel reply message populates
-	 * the processes current priority and its time slice */
 	if ((rv = sys_schedctl(0, rmp->endpoint, 0, 0, 0)) != OK) {
 		printf("Sched: Error taking over scheduling for %d, kernel said %d\n",
 			rmp->endpoint, rv);
@@ -256,7 +205,7 @@ int do_nice(message *m_ptr)
 	struct schedproc *rmp;
 	int rv;
 	int proc_nr_n;
-	unsigned new_q, old_q, old_max_q;
+	unsigned new_priority;
 
 	/* check who can send you requests */
 	if (!accept_message(m_ptr))
@@ -269,23 +218,17 @@ int do_nice(message *m_ptr)
 	}
 
 	rmp = &schedproc[proc_nr_n];
-	new_q = m_ptr->m_pm_sched_scheduling_set_nice.maxprio;
-	if (new_q >= NR_SCHED_QUEUES) {
-		return EINVAL;
-	}
+	new_priority = m_ptr->m_pm_sched_scheduling_set_nice.maxprio;
 
-	/* Store old values, in case we need to roll back the changes */
-	old_q     = rmp->priority;
-	old_max_q = rmp->max_priority;
+	if (new_priority < MIN_USER_Q) new_priority = MIN_USER_Q;
+	if (new_priority > MAX_USER_Q) new_priority = MAX_USER_Q;
 
 	/* Update the proc entry and reschedule the process */
 	rmp->max_priority = rmp->priority = new_q;
 
 	if ((rv = schedule_process_local(rmp)) != OK) {
-		/* Something went wrong when rescheduling the process, roll
-		 * back the changes to proc struct */
-		rmp->priority     = old_q;
-		rmp->max_priority = old_max_q;
+		printf("SCHED: Error rescheduling process after nice: %d\n", rv);
+
 	}
 
 	return rv;
@@ -297,14 +240,9 @@ int do_nice(message *m_ptr)
 static int schedule_process(struct schedproc * rmp, unsigned flags)
 {
 	int err;
-	int new_prio, new_quantum, new_cpu, niced;
+	int new_prio, new_quantum, new_cpu;
 
 	pick_cpu(rmp);
-
-	if (flags & SCHEDULE_CHANGE_PRIO)
-		new_prio = rmp->priority;
-	else
-		new_prio = -1;
 
 	if (flags & SCHEDULE_CHANGE_QUANTUM)
 		new_quantum = rmp->time_slice;
@@ -316,10 +254,8 @@ static int schedule_process(struct schedproc * rmp, unsigned flags)
 	else
 		new_cpu = -1;
 
-	niced = (rmp->max_priority > USER_Q);
-
 	if ((err = sys_schedule(rmp->endpoint, new_prio,
-		new_quantum, new_cpu, niced)) != OK) {
+		new_quantum, new_cpu, 0)) != OK) {
 		printf("PM: An error occurred when trying to schedule %d: %d\n",
 		rmp->endpoint, err);
 	}
@@ -352,18 +288,5 @@ void init_scheduling(void)
  */
 void balance_queues(void)
 {
-	struct schedproc *rmp;
-	int r, proc_nr;
 
-	for (proc_nr=0, rmp=schedproc; proc_nr < NR_PROCS; proc_nr++, rmp++) {
-		if (rmp->flags & IN_USE) {
-			if (rmp->priority > rmp->max_priority) {
-				rmp->priority -= 1; /* increase priority */
-				schedule_process_local(rmp);
-			}
-		}
-	}
-
-	if ((r = sys_setalarm(balance_timeout, 0)) != OK)
-		panic("sys_setalarm failed: %d", r);
 }
